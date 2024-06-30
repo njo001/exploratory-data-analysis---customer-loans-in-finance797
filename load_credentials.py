@@ -1,4 +1,3 @@
-#%%
 
 import yaml
 
@@ -20,3 +19,4 @@ def load_credentials(file_path='credentials.yaml'):
 if __name__ == "__main__":
     credentials = load_credentials()
     print(credentials)
+
