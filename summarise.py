@@ -22,13 +22,12 @@ class DataFrameInfo:
         print(self.df.describe(include='all'))
 
     def statistical_summary(self):
-        """Extract statistical values: median, standard deviation, and mean from numeric columns."""
-          # Filter out categorical columns
-        numeric_df = self.df.select_dtypes(include=[float, int])
+        """Extract statistical values: median, standard deviation, and mean from numeric columns only."""
+        numeric_cols = self.df.select_dtypes(include=['number']).columns
         stats = {
-            'median': numeric_df.median(),
-            'std_dev': numeric_df.std(),
-            'mean': numeric_df.mean()
+            'median': self.df[numeric_cols].median(),
+            'std_dev': self.df[numeric_cols].std(),
+            'mean': self.df[numeric_cols].mean()
         }
         return stats
 
@@ -49,22 +48,19 @@ class DataFrameInfo:
         summary = pd.DataFrame({'Null Count': null_counts, 'Percentage': null_percentage})
         return summary
 
-    def check_duplicates(self):
-        """Check for duplicate rows in the DataFrame."""
-        duplicate_count = self.df.duplicated().sum()
-        print(f"Number of duplicate rows: {duplicate_count}")
-        return duplicate_count
 
-    def count_values(self):
-        """Count values in each column."""
-        counts = {col: self.df[col].value_counts() for col in self.df.columns}
-        return counts
-
-    def correlation_matrix(self):
-        """Generate and return the correlation matrix for numeric columns."""
-        corr_matrix = self.df.corr()
-        print("Correlation Matrix:")
-        print(corr_matrix)
-        return corr_matrix
 
 # %%
+
+if __name__ == "__main__":
+    # Load data
+    df = pd.read_csv('loan_payments.csv')
+   
+    # Instantiate the class
+    df = DataFrameInfo(df)
+    df.describe_columns()
+    df.statistical_summary()
+    df.count_distinct_values()
+
+  
+ 
