@@ -12,9 +12,12 @@ def load_data_from_csv(filename):
     """
     return pd.read_csv(filename)
 
+
 if __name__ == "__main__":
     # Load the data from a CSV file in the same directory
     df = load_data_from_csv('loan_payments.csv')
     
     # Print the first few rows of the DataFrame
     print(df.head())
+
+
