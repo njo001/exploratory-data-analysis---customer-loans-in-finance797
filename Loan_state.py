@@ -1,89 +1,137 @@
 # State of loans
-
-'''Summarise currently what percentage of the loans are recovered against the investor funding and the total amount funded. Visualise your results on an appropriate graph.
-
-Additionally visualise what percentage of the total amount would be recovered up to 6 months' in the future.'''
-
 import pandas as pd
+import matplotlib.pyplot as plt
+#%%
 
-df = pd.read_csv('loan_payments.csv')  
+def calculate_recovery_statistics(df):
+    total_recoveries = df['recoveries'].sum()
+    total_funded_amount_inv = df['funded_amount_inv'].sum()
+    total_loan_amount = df['loan_amount'].sum()
 
-# Calculate the total recoveries
-total_recoveries = df['recoveries'].sum()
+    recovery_percentage_inv = round((total_recoveries / total_funded_amount_inv) * 100, 2)
+    recovery_percentage_total = round((total_recoveries / total_loan_amount) * 100, 2)
 
-# Calculate the total funded amount by investors
-total_funded_amount_inv = df['funded_amount_inv'].sum()
+    return {
+        'Total Recoveries': round(total_recoveries, 2),
+        'Total Funded Amount by Investors': round(total_funded_amount_inv, 2),
+        'Recovery Percentage for Investors': recovery_percentage_inv,
+        'Total Funded Amount': round(total_loan_amount, 2),
+        'Recovery Percentage in Total': recovery_percentage_total
+    }
 
-# Calculate the total loan amount
-total_loan_amount = df['loan_amount'].sum()
+def calculate_loss(df):
+    charged_off_df = df[df['loan_status'] == 'Charged Off'].copy()  # Ensure we're working with a copy
 
-# Calculate the percentage of recoveries against the total funded amount by investors
-recovery_percentage_inv = round((total_recoveries / total_funded_amount_inv) * 100,2)
+    # Convert relevant columns to numeric
+    charged_off_df['term'] = charged_off_df['term'].str.replace('months', '', regex=False).astype(float)
+    charged_off_df['instalment'] = pd.to_numeric(charged_off_df['instalment'], errors='coerce')
+    charged_off_df['total_payment'] = pd.to_numeric(charged_off_df['total_payment'], errors='coerce')
 
-# Calculate the percentage of recoveries against the total funded amount
-recovery_percentage_total = round((total_recoveries / total_loan_amount) * 100,2)
+    percentage_charged_off = round((len(charged_off_df) / len(df)) * 100, 2)
+    total_paid_before_charged_off = round(charged_off_df['total_payment'].sum(), 2)
 
+    charged_off_df['revenues_expected'] = round(charged_off_df['instalment'] * charged_off_df['term'], 2)
+    charged_off_df['lost_revenue'] = round(charged_off_df['revenues_expected'] - charged_off_df['total_payment'], 2)
 
-# Summarize the results
-summary = {
-    'Total Recoveries': round(total_recoveries,2),
-    'Total Funded Amount by Investors': round(total_funded_amount_inv,2),
-    'Recovery Percentage for investors': recovery_percentage_inv,
-    'Total Funded Amount': round(total_loan_amount,2),
-    'Recovery Percentage in Total': recovery_percentage_total
+    return {
+        'Percentage of loans charged off (%)': percentage_charged_off,
+        'Amount paid off before charged off (GBP)': total_paid_before_charged_off,
+        'Expected revenues if not charged off (GBP)': round(charged_off_df['revenues_expected'].sum(), 2),
+        'Total lost revenues (GBP)': round(charged_off_df['lost_revenue'].sum(), 2)
+    }
 
-}
+def visualize_projected_loss(charged_off_df):
+    charged_off_df = charged_off_df.copy()  # Ensure we're working with a copy
+    charged_off_df['issue_date'] = pd.to_datetime(charged_off_df['issue_date'], errors='coerce')
+    charged_off_df['last_payment_date'] = pd.to_datetime(charged_off_df['last_payment_date'], errors='coerce')
 
-summary
+    charged_off_df.loc[:, 'days_diff'] = (charged_off_df['last_payment_date'] - charged_off_df['issue_date']).dt.days
+    charged_off_df.loc[:, 'term_days'] = charged_off_df['term'] * 30
+    charged_off_df.loc[:, 'term_remaining'] = charged_off_df['term_days'] - charged_off_df['days_diff']
 
-## Loss
-'''Calculate the percentage of charged off loans historically and the total amount that was paid towards these loans before being charged off.'''
+    plt.figure(figsize=(10, 6))
+    plt.scatter(charged_off_df['days_diff'], charged_off_df['lost_revenue'])
+    plt.title('Projected Loss Over Remaining Term of Charged Off Loans')
+    plt.xlabel('Days Since Issue Date')
+    plt.ylabel('Lost Revenue (GBP)')
+    plt.show()
 
-# Filter by charged off loans from loan_status
-filtered_data = df[df['loan_status'] == 'Charged Off']
+def calculate_behind_on_payments(df):
+    behind_df = df[df['loan_status'].str.contains('Late', case=False)].copy()  # Ensure we're working with a copy
+    charged_df = df[df['loan_status'].str.contains('Charged Off', case=False)].copy()  # Ensure we're working with a copy
 
-# Calculate percentage of charged off loans
-percentage_charged_off = round((len(df[df['loan_status'] == 'Charged Off'])/ len(df['loan_status']))*100,2)
-print('Percentage of loans charged off (%):', percentage_charged_off)
+    total_loans = len(df)
+    behind_loans = len(behind_df)
+    charged_off = len(charged_df)
 
-# Calculate total amounts payed towards charged off loans
-total_payed_befor_charged_off = round(filtered_data['total_payment'].sum(),2)
-print('Amount payed off before charged off (GBP):', total_payed_befor_charged_off)
+    percentage_behind = (behind_loans / total_loans) * 100
+    percentage_if_charged_off = ((behind_loans + charged_off) / total_loans) * 100
 
-loss_summary = {
-    'Percentage of loans charged off (%)': percentage_charged_off,
-    'Amount payed off before charged off (GBP)': total_payed_befor_charged_off
+    total_amount_behind = behind_df['loan_amount'].sum()
 
-}
+    # Ensure numeric types
+    behind_df.loc[:, 'term'] = behind_df['term'].str.replace('months', '', regex=False).astype(float)
+    behind_df.loc[:, 'instalment'] = pd.to_numeric(behind_df['instalment'], errors='coerce')
+    behind_df.loc[:, 'total_payment'] = pd.to_numeric(behind_df['total_payment'], errors='coerce')
 
-loss_summary
+    behind_df.loc[:, 'revenues_expected'] = round(behind_df['instalment'] * behind_df['term'], 2)
+    behind_df.loc[:, 'lost_revenue'] = round(behind_df['revenues_expected'] - behind_df['total_payment'], 2)
 
-## Calculating projected loss
-'''Calculate the projected loss of the loans marked as Charged Off.
+    return {
+        'Percentage behind (%)': round(percentage_behind, 2),
+        'Total lost if charged off (GBP)': round(behind_df['lost_revenue'].sum(), 2),
+        'Percentage of late plus charged off of total loans': percentage_if_charged_off
+    }
 
-Calculate the loss in revenue these loans would have generated for the company if they had finished their term. 
-Visualise the loss projected over the remaining term of these loans.'''
+def visualize_payments_by_status(df_combined):
+    plt.figure(figsize=(12, 6))
+    df_combined.boxplot(column='total_payment', by=['grade', 'status'], grid=False, patch_artist=True)
+    plt.title('Payments Made by Loan Grade and Status')
+    plt.suptitle('')  # Suppress the automatic title to keep it clean
+    plt.xlabel('Grade and Status')
+    plt.ylabel('Payments Made')
+    plt.tick_params(axis='x', rotation=45)
+    plt.show()
 
-# Calculate the loss in revenue
-filtered_data.columns
-filtered_data = filtered_data.dropna(subset=['term'])
-filtered_data['term'] = filtered_data['term'].str.replace('months', '').str.strip().astype(int)
+    plt.figure(figsize=(12, 6))
+    df_combined.boxplot(column='total_payment', by=['purpose', 'status'], grid=False, patch_artist=True)
+    plt.title('Payments Made by Purpose and Status')
+    plt.suptitle('')  # Suppress the automatic title to keep it clean
+    plt.xlabel('Purpose and Status')
+    plt.ylabel('Payments Made')
+    plt.tick_params(axis='x', rotation=45)
+    plt.show()
 
-filtered_data['revenues_expected'] = round(filtered_data['instalment']*filtered_data['term'],2)
-agg_revenues_expected = round(filtered_data['revenues_expected'].sum(),2)                                        
-print("Expected revenues (GBP):", agg_revenues_expected)
+def main():
+    df = load_data('loan_payments.csv')
 
-filtered_data['lost_revenue'] = round(filtered_data['revenues_expected'] - filtered_data['total_payment'],2)
-agg_lost_revenue = round(filtered_data['lost_revenue'].sum(),2)
-print("Total lost revenues (GBP):", agg_lost_revenue) 
+    # Recovery Statistics
+    recovery_summary = calculate_recovery_statistics(df)
+    print("Recovery Statistics:")
+    print(recovery_summary)
 
-lost_revenue_summary = {
-    "Expected revenues if not charged off (GBP)": agg_revenues_expected, 
-    "Total lost revenues (GBP)": agg_lost_revenue
-}
+    # Loss Calculation
+    loss_summary = calculate_loss(df)
+    print("\nLoss Summary:")
+    print(loss_summary)
+    
+    # Visualize Projected Loss
+    charged_off_df = df[df['loan_status'] == 'Charged Off'].copy()  # Ensure we're working with a copy
+    visualize_projected_loss(charged_off_df)
 
-lost_revenue_summary
+    # Behind on Payments
+    behind_summary = calculate_behind_on_payments(df)
+    print("\nBehind on Payments Summary:")
+    print(behind_summary)
 
-# Visulise loss projected
+    # Visualize Payments by Status
+    df_combined = pd.concat([
+        df[df['loan_status'].str.contains('Charged Off', case=False)].assign(status='Charged Off'),
+        df[df['loan_status'].str.contains('Late', case=False)].assign(status='Late')
+    ]).copy()  # Ensure we're working with a copy
+    visualize_payments_by_status(df_combined)
 
+if __name__ == "__main__":
+    main()
 
+# %%
